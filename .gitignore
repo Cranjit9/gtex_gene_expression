@@ -1,0 +1,67 @@
+# =========================
+# Python / Jupyter / VS Code
+# =========================
+__pycache__/
+*.py[cod]
+
+.ipynb_checkpoints/
+
+.vscode/
+.DS_Store
+
+# -------------------------
+# Virtual environments
+# -------------------------
+.venv/
+venv/
+env/
+ENV/
+.python-version
+.env
+
+# -------------------------
+# Data (keep out of version control)
+# -------------------------
+# Ignore the full project data tree by default.
+data/
+
+# If you later want to keep the folder structure but selectively track
+# specific files, use patterns like:
+# !data/
+# !data/processed/
+# data/processed/*
+# !data/processed/example.csv
+
+# Explicitly ignore common large bio formats anywhere
+*.gct
+*.h5
+*.hdf5
+*.feather
+*.parquet
+*.rds
+*.pkl
+*.pickle
+
+# -------------------------
+# Outputs (regenerated)
+# -------------------------
+output/
+reports/
+figures/
+tables/
+
+# -------------------------
+# Models / artifacts
+# -------------------------
+models/
+checkpoints/
+*.joblib
+
+# -------------------------
+# Logs / temp
+# -------------------------
+logs/
+*.log
+tmp/
+temp/
+.claude/
