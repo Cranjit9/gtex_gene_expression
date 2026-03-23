@@ -49,6 +49,7 @@ output/
 reports/
 figures/
 tables/
+scripts/
 
 # -------------------------
 # Models / artifacts
