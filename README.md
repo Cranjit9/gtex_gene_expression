@@ -35,7 +35,7 @@ Download the following files from [GTEx Portal](https://gtexportal.org/) and pla
 |------|-------------|
 | `GTEx_Analysis_v10_RNASeQCv2.4.2_gene_tpm.gct` | Gene TPM expression matrix (all tissues) |
 | `GTEx_Analysis_v11_Annotations_SampleAttributesDS.txt` | Sample-level metadata |
-| `Gtex_restricted.txt` | Donor-level restricted data (AGE, SEX) |
+| `Gtex_restricted.txt` | Donor-level restricted data (AGE, SEX) — requires dbGaP approved access; contact GTEx to request project-specific authorization |
 | `meta_data_with_url.csv` | Tissue pathology categories and notes |
 
 ## Usage
