@@ -51,7 +51,8 @@ notebooks/
 ├── 05_all_tissue_models.ipynb          # Pan-tissue LR models (baseline)
 ├── 06_summary_baseline.ipynb           # Summary figures (bar chart, heatmap)
 ├── 07_rf_variance_filter.ipynb         # Random Forest + 20K variance filter
-└── 08_comparison.ipynb                 # LR vs RF comparison
+├── 08_comparison.ipynb                 # LR vs RF comparison
+└── 09_confounder_analysis.ipynb        # Confounder-only vs expression+confounder RF
 ```
 
 All notebooks import from the `gtex_biomarkers/` package — shared data loading, model training, and evaluation code.

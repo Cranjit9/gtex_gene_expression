@@ -5,7 +5,7 @@ import numpy as np
 from joblib import Parallel, delayed
 
 from gtex_biomarkers.config import Config
-from gtex_biomarkers.models import run_tissue_models
+from gtex_biomarkers.models import run_tissue_models, run_tissue_confounder_models
 
 
 def run_all_tissue_models_parallel(pairs_df, df_meta_url, blood_subjid, X_wb,
@@ -60,6 +60,56 @@ def run_all_tissue_models_parallel(pairs_df, df_meta_url, blood_subjid, X_wb,
     summary_df = pd.DataFrame(summary_rows).sort_values("mean_auc", ascending=False)
 
     return results_dict, summary_df
+
+
+def _make_summary(results_dict):
+    """Build a summary DataFrame from a results dict."""
+    rows = [
+        {"tissue": r["tissue"], "category": r["category"],
+         "mean_auc": r["mean_auc"], "std_auc": r["std_auc"],
+         "optimal_threshold": r["optimal_threshold"]}
+        for r in results_dict.values()
+    ]
+    return pd.DataFrame(rows).sort_values("mean_auc", ascending=False)
+
+
+def run_all_confounder_models_parallel(pairs_df, df_meta_url, blood_subjid,
+                                       X_wb, X_conf, model_factory,
+                                       cfg=None, n_jobs=-1):
+    """Run confounder-only AND expression+confounder RF models, parallelized by tissue.
+
+    Returns
+    -------
+    conf_results : dict — {tag: result_dict} for confounder-only models
+    conf_summary : DataFrame
+    comb_results : dict — {tag: result_dict} for expression+confounder models
+    comb_summary : DataFrame
+    """
+    cfg = cfg or Config
+
+    tissue_groups = {}
+    for _, row in pairs_df.iterrows():
+        tissue_groups.setdefault(row["tissue"], []).append(
+            (row["category"], row["n_samples"])
+        )
+
+    parallel_out = Parallel(n_jobs=n_jobs, verbose=10)(
+        delayed(run_tissue_confounder_models)(
+            tissue, cat_list, df_meta_url, blood_subjid, X_wb, X_conf,
+            model_factory, cfg=cfg
+        )
+        for tissue, cat_list in sorted(tissue_groups.items())
+    )
+
+    conf_results, comb_results = {}, {}
+    for tissue_conf, tissue_comb in parallel_out:
+        for tag, res in tissue_conf:
+            conf_results[tag] = res
+        for tag, res in tissue_comb:
+            comb_results[tag] = res
+
+    return (conf_results, _make_summary(conf_results),
+            comb_results, _make_summary(comb_results))
 
 
 def build_comparison_table(lr_summary, rf_summary):

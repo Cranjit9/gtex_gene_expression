@@ -11,7 +11,7 @@ def load_raw_data(cfg=None):
 
     Returns
     -------
-    df_expr : DataFrame  — gene TPM expression (genes × samples)
+    df_expr : DataFrame  — gene TPM expression (genes x samples)
     df_samples : DataFrame — sample-level metadata
     df_age : DataFrame — donor-level restricted data (AGE, SEX, …)
     df_meta_url : DataFrame — pathology metadata with tissue info
@@ -38,7 +38,7 @@ def filter_whole_blood(df_samples):
 
 
 def build_blood_expression_matrix(df_expr, blood_meta):
-    """Build (samples × genes) expression matrix for Whole Blood.
+    """Build (samples x genes) expression matrix for Whole Blood.
 
     Returns
     -------
@@ -65,12 +65,12 @@ def variance_filter(X_wb, n_top=None):
 
     Parameters
     ----------
-    X_wb : DataFrame — (samples × genes)
+    X_wb : DataFrame — (samples x genes)
     n_top : int — number of genes to keep (default: Config.N_TOP_VAR_GENES)
 
     Returns
     -------
-    X_wb_var : DataFrame — (samples × n_top)
+    X_wb_var : DataFrame — (samples x n_top)
     gene_var : Series — variance per gene, sorted descending
     """
     n_top = n_top or Config.N_TOP_VAR_GENES
@@ -78,6 +78,44 @@ def variance_filter(X_wb, n_top=None):
     top_genes = gene_var.head(n_top).index.tolist()
     X_wb_var = X_wb[top_genes]
     return X_wb_var, gene_var
+
+
+CONFOUNDER_COLS = ["SEX", "AGE", "RACE", "DTHHRDY", "TRISCHD"]
+
+
+def build_confounder_matrix(df_age, blood_subjid):
+    """Build donor-level confounder matrix aligned to blood samples.
+
+    Features: SEX, AGE, RACE, DTHHRDY (Hardy Scale), TRISCHD (ischemic time).
+    RACE codes 98/99 are treated as missing.  All NaNs imputed with column median.
+
+    Parameters
+    ----------
+    df_age : DataFrame — donor-level restricted data (one row per donor)
+    blood_subjid : Series — index = SAMPID, values = donor SUBJID
+
+    Returns
+    -------
+    X_conf : DataFrame — shape (n_blood_samples, n_confounders), index = SAMPID
+    """
+    conf = df_age.drop_duplicates("SUBJID").set_index("SUBJID")
+    cols = [c for c in CONFOUNDER_COLS if c in conf.columns]
+    conf = conf[cols].copy()
+
+    # Clean RACE: 98/99 = unknown → NaN
+    if "RACE" in conf.columns:
+        conf.loc[conf["RACE"].isin([98, 99]), "RACE"] = np.nan
+
+    # Map to blood samples via SUBJID
+    X_conf = pd.DataFrame(index=blood_subjid.index)
+    for col in cols:
+        X_conf[col] = blood_subjid.map(conf[col])
+
+    # Ensure numeric and impute missing with column median
+    X_conf = X_conf.apply(pd.to_numeric, errors="coerce")
+    X_conf = X_conf.fillna(X_conf.median())
+
+    return X_conf
 
 
 def build_blood_subjid(X_wb):

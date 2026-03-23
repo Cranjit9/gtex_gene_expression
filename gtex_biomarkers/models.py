@@ -122,6 +122,110 @@ def run_cv(X, y, groups, model_factory, cfg=None, top_k=None):
     }
 
 
+def run_cv_no_fs(X, y, groups, model_factory, cfg=None):
+    """Run CV without feature selection (for low-dimensional inputs like confounders).
+
+    Same grouped CV as run_cv but uses all columns directly — no AUC-based filtering.
+    """
+    cfg = cfg or Config
+
+    cv = StratifiedGroupKFold(
+        n_splits=cfg.N_SPLITS, shuffle=True, random_state=cfg.SEED
+    )
+
+    oof = np.full(len(y), np.nan)
+    fold_fprs, fold_tprs, fold_aucs = [], [], []
+
+    for fold, (tr, te) in enumerate(cv.split(X, y, groups=groups), 1):
+        Xtr, Xte = X.iloc[tr], X.iloc[te]
+        ytr, yte = y.iloc[tr], y.iloc[te]
+
+        model = model_factory()
+        model.fit(Xtr, ytr)
+        proba = model.predict_proba(Xte)[:, 1]
+        oof[te] = proba
+
+        fauc = roc_auc_score(yte, proba)
+        fpr, tpr, _ = roc_curve(yte, proba)
+        fold_fprs.append(fpr)
+        fold_tprs.append(tpr)
+        fold_aucs.append(fauc)
+
+    mean_auc = np.mean(fold_aucs)
+    std_auc = np.std(fold_aucs)
+
+    mask_oof = ~np.isnan(oof)
+    fpr_oof, tpr_oof, thresholds_oof = roc_curve(
+        y.values[mask_oof], oof[mask_oof]
+    )
+    j_scores = tpr_oof - fpr_oof
+    optimal_thresh = thresholds_oof[np.argmax(j_scores)]
+
+    return {
+        "y": y, "oof": oof,
+        "fold_fprs": fold_fprs, "fold_tprs": fold_tprs, "fold_aucs": fold_aucs,
+        "mean_auc": mean_auc, "std_auc": std_auc,
+        "optimal_threshold": optimal_thresh,
+    }
+
+
+def run_cv_combined(X_expr, X_conf, y, groups, model_factory, cfg=None, top_k=None):
+    """Run CV with AUC-based feature selection on expression, always including confounders.
+
+    Per fold: select top_k expression features (train-only), concatenate with all
+    confounder columns, then train and predict.
+    """
+    cfg = cfg or Config
+    top_k = top_k or cfg.TOP_K_FEATURES
+
+    cv = StratifiedGroupKFold(
+        n_splits=cfg.N_SPLITS, shuffle=True, random_state=cfg.SEED
+    )
+
+    oof = np.full(len(y), np.nan)
+    fold_fprs, fold_tprs, fold_aucs = [], [], []
+
+    for fold, (tr, te) in enumerate(cv.split(X_expr, y, groups=groups), 1):
+        Xtr_e, Xte_e = X_expr.iloc[tr], X_expr.iloc[te]
+        Xtr_c, Xte_c = X_conf.iloc[tr], X_conf.iloc[te]
+        ytr, yte = y.iloc[tr], y.iloc[te]
+
+        # Feature selection on expression only
+        top_feat = _auc_feature_selection(Xtr_e, ytr, top_k=top_k)
+
+        # Concatenate selected expression + all confounders
+        Xtr_combined = pd.concat([Xtr_e[top_feat], Xtr_c], axis=1)
+        Xte_combined = pd.concat([Xte_e[top_feat], Xte_c], axis=1)
+
+        model = model_factory()
+        model.fit(Xtr_combined, ytr)
+        proba = model.predict_proba(Xte_combined)[:, 1]
+        oof[te] = proba
+
+        fauc = roc_auc_score(yte, proba)
+        fpr, tpr, _ = roc_curve(yte, proba)
+        fold_fprs.append(fpr)
+        fold_tprs.append(tpr)
+        fold_aucs.append(fauc)
+
+    mean_auc = np.mean(fold_aucs)
+    std_auc = np.std(fold_aucs)
+
+    mask_oof = ~np.isnan(oof)
+    fpr_oof, tpr_oof, thresholds_oof = roc_curve(
+        y.values[mask_oof], oof[mask_oof]
+    )
+    j_scores = tpr_oof - fpr_oof
+    optimal_thresh = thresholds_oof[np.argmax(j_scores)]
+
+    return {
+        "y": y, "oof": oof,
+        "fold_fprs": fold_fprs, "fold_tprs": fold_tprs, "fold_aucs": fold_aucs,
+        "mean_auc": mean_auc, "std_auc": std_auc,
+        "optimal_threshold": optimal_thresh,
+    }
+
+
 def run_tissue_models(tissue, cat_list, df_meta_url, blood_subjid, X_wb,
                       model_factory, cfg=None):
     """Run CV for all categories of a single tissue.
@@ -178,3 +282,57 @@ def run_tissue_models(tissue, cat_list, df_meta_url, blood_subjid, X_wb,
         results.append((tag, res))
 
     return results
+
+
+def run_tissue_confounder_models(tissue, cat_list, df_meta_url, blood_subjid,
+                                 X_wb, X_conf, model_factory, cfg=None):
+    """Run confounder-only AND expression+confounder models for one tissue.
+
+    Returns two lists: (conf_results, combined_results), each a list of
+    (tag, result_dict) tuples.
+    """
+    cfg = cfg or Config
+    conf_results = []
+    comb_results = []
+
+    tissue_sub = df_meta_url[df_meta_url["Tissue"] == tissue].copy()
+    tissue_sub["SUBJID"] = (
+        tissue_sub["Tissue.Sample.ID"].astype(str)
+        .str.split("-").str[:2].str.join("-")
+    )
+    known = tissue_sub[tissue_sub["Pathology.Categories"].notna()].copy()
+
+    for cat, n_samples in cat_list:
+        tag = f"{tissue} | {cat}"
+
+        has_cat = known["Pathology.Categories"].str.contains(
+            cat, case=False
+        ).astype(int)
+        donor_lab = has_cat.groupby(known["SUBJID"]).max()
+
+        y_cat = blood_subjid.map(donor_lab)
+        keep = y_cat.notna()
+        X_expr_cat = X_wb.loc[keep].copy()
+        X_conf_cat = X_conf.loc[keep].copy()
+        y_cat = y_cat.loc[keep].astype(int)
+        g_cat = blood_subjid.loc[keep].astype(str)
+
+        n_pos = int(y_cat.sum())
+        n_neg = int((y_cat == 0).sum())
+        if n_pos < cfg.MIN_POS_NEG_BLOOD or n_neg < cfg.MIN_POS_NEG_BLOOD:
+            continue
+
+        # Model A: confounders only (no feature selection)
+        res_c = run_cv_no_fs(X_conf_cat, y_cat, g_cat, model_factory, cfg=cfg)
+        res_c["tissue"] = tissue
+        res_c["category"] = cat
+        conf_results.append((tag, res_c))
+
+        # Model B: expression + confounders (AUC FS on expression, confounders always kept)
+        res_cb = run_cv_combined(X_expr_cat, X_conf_cat, y_cat, g_cat,
+                                 model_factory, cfg=cfg)
+        res_cb["tissue"] = tissue
+        res_cb["category"] = cat
+        comb_results.append((tag, res_cb))
+
+    return conf_results, comb_results
