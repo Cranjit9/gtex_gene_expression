@@ -69,7 +69,7 @@ def plot_roc_grid(results_dict, suptitle="", save_path=None, ncols=4):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -107,7 +107,7 @@ def plot_pr_grid(results_dict, suptitle="", save_path=None, ncols=4):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -138,7 +138,7 @@ def plot_cm_grid(results_dict, suptitle="", save_path=None, ncols=4):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -172,7 +172,7 @@ def plot_boxplot_grid(results_dict, suptitle="", save_path=None, ncols=4):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -199,7 +199,7 @@ def plot_ranked_barplot(summary_df, auc_cutoff=None, save_path=None):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -228,7 +228,7 @@ def plot_auc_heatmap(summary_df, save_path=None):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -252,7 +252,7 @@ def plot_roc_overlay(results_dict, tags, title="", save_path=None):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -281,7 +281,7 @@ def plot_comparison_scatter(comp_df, save_path=None):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig
 
 
@@ -304,5 +304,5 @@ def plot_comparison_barplot(comp_df, save_path=None):
     fig.tight_layout()
     if save_path:
         fig.savefig(save_path, bbox_inches="tight")
-    plt.show()
+    plt.close(fig)
     return fig

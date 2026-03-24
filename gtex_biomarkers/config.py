@@ -9,6 +9,7 @@ class Config:
     # ── Paths ─────────────────────────────────────────────────────────────────
     ROOT_DIR = Path(__file__).resolve().parent.parent
     RAW_DIR = ROOT_DIR / "data" / "raw"
+    CACHE_DIR = ROOT_DIR / "data" / "cache"
     PROCESSED_DIR = ROOT_DIR / "data" / "processed"
     TABLES_DIR = ROOT_DIR / "output" / "tables"
     FIGURES_DIR = ROOT_DIR / "output" / "figures"
@@ -47,5 +48,5 @@ class Config:
     @classmethod
     def ensure_dirs(cls):
         """Create output directories if they don't exist."""
-        for d in [cls.RAW_DIR, cls.PROCESSED_DIR, cls.TABLES_DIR, cls.FIGURES_DIR]:
+        for d in [cls.RAW_DIR, cls.CACHE_DIR, cls.PROCESSED_DIR, cls.TABLES_DIR, cls.FIGURES_DIR]:
             d.mkdir(parents=True, exist_ok=True)

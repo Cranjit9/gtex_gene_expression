@@ -1,5 +1,8 @@
 """Data loading, filtering, and blood expression matrix construction."""
 
+import pickle
+from pathlib import Path
+
 import pandas as pd
 import numpy as np
 
@@ -133,3 +136,65 @@ def build_blood_subjid(X_wb):
         .str.split("-").str[:2].str.join("-")
     )
     return blood_subjid
+
+
+# ── Cache helpers ────────────────────────────────────────────────────────────
+
+_CACHE_FILE = "processed_data.pkl"
+
+
+def save_cache(X_wb, blood_subjid, blood_meta, df_meta_url, df_age, cfg=None):
+    """Save processed data objects to a single pickle file in CACHE_DIR.
+
+    Call this at the end of notebook 01 after building all core objects.
+    """
+    cfg = cfg or Config
+    cfg.CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = cfg.CACHE_DIR / _CACHE_FILE
+    payload = {
+        "X_wb": X_wb,
+        "blood_subjid": blood_subjid,
+        "blood_meta": blood_meta,
+        "df_meta_url": df_meta_url,
+        "df_age": df_age,
+    }
+    with open(cache_path, "wb") as f:
+        pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+    size_mb = cache_path.stat().st_size / (1024 * 1024)
+    print(f"Cache saved → {cache_path}  ({size_mb:.1f} MB)")
+
+
+def load_cache(cfg=None):
+    """Load processed data from cache.
+
+    Returns
+    -------
+    X_wb : DataFrame — (samples × genes)
+    blood_subjid : Series — SAMPID → SUBJID mapping
+    blood_meta : DataFrame — Whole Blood sample metadata
+    df_meta_url : DataFrame — pathology metadata
+    df_age : DataFrame — donor-level restricted data
+
+    Raises
+    ------
+    FileNotFoundError
+        If cache does not exist — run notebook 01 first.
+    """
+    cfg = cfg or Config
+    cache_path = cfg.CACHE_DIR / _CACHE_FILE
+    if not cache_path.exists():
+        raise FileNotFoundError(
+            f"Cache not found at {cache_path}.\n"
+            "Please run notebook 01_data_loading_exploration first to build the cache."
+        )
+    with open(cache_path, "rb") as f:
+        payload = pickle.load(f)
+    print(f"Loaded cache from {cache_path}")
+    print(f"  X_wb: {payload['X_wb'].shape[0]} samples × {payload['X_wb'].shape[1]} genes")
+    return (
+        payload["X_wb"],
+        payload["blood_subjid"],
+        payload["blood_meta"],
+        payload["df_meta_url"],
+        payload["df_age"],
+    )
