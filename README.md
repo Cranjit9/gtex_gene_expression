@@ -74,8 +74,6 @@ gtex_gene_expression/
 │   ├── evaluation.py              # ROC, PR, CM, boxplot, summary plots
 │   └── utils.py                   # Parallel runners, comparison tables
 ├── notebooks/                     # Analysis notebooks (run in order)
-├── scripts/
-│   └── exploratory.ipynb          # Original monolithic notebook (archive)
 ├── data/                          # Not tracked in git
 │   ├── raw/                       # GTEx downloads
 │   └── processed/                 # Imputed labels
