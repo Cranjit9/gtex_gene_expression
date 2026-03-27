@@ -9,7 +9,8 @@ from gtex_biomarkers.models import run_tissue_models, run_tissue_confounder_mode
 
 
 def run_all_tissue_models_parallel(pairs_df, df_meta_url, blood_subjid, X_wb,
-                                   model_factory, cfg=None, n_jobs=-1):
+                                   model_factory, cfg=None, n_jobs=-1,
+                                   save_features=False):
     """Run CV models for all tissue × category pairs, parallelized by tissue.
 
     Parameters
@@ -20,6 +21,7 @@ def run_all_tissue_models_parallel(pairs_df, df_meta_url, blood_subjid, X_wb,
     X_wb : DataFrame — blood expression matrix
     model_factory : callable — returns a fresh model per fold
     n_jobs : int — number of parallel workers (-1 = all cores)
+    save_features : bool — if True, capture per-fold gene importances
 
     Returns
     -------
@@ -39,7 +41,7 @@ def run_all_tissue_models_parallel(pairs_df, df_meta_url, blood_subjid, X_wb,
     parallel_out = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(run_tissue_models)(
             tissue, cat_list, df_meta_url, blood_subjid, X_wb,
-            model_factory, cfg=cfg
+            model_factory, cfg=cfg, save_features=save_features
         )
         for tissue, cat_list in sorted(tissue_groups.items())
     )

@@ -55,7 +55,8 @@ def make_rf_model(cfg=None):
     )
 
 
-def run_cv(X, y, groups, model_factory, cfg=None, top_k=None):
+def run_cv(X, y, groups, model_factory, cfg=None, top_k=None,
+           save_features=False):
     """Run leak-free 5-fold grouped CV with per-fold feature selection.
 
     Parameters
@@ -66,12 +67,14 @@ def run_cv(X, y, groups, model_factory, cfg=None, top_k=None):
     model_factory : callable — returns a fresh model/pipeline per fold
     cfg : Config class
     top_k : int — number of features to select per fold
+    save_features : bool — if True, capture selected genes + RF importances
 
     Returns
     -------
     dict with keys:
         y, oof, fold_fprs, fold_tprs, fold_aucs,
         mean_auc, std_auc, optimal_threshold
+        feature_info (only if save_features=True): list of per-fold dicts
     """
     cfg = cfg or Config
     top_k = top_k or cfg.TOP_K_FEATURES
@@ -82,6 +85,7 @@ def run_cv(X, y, groups, model_factory, cfg=None, top_k=None):
 
     oof = np.full(len(y), np.nan)
     fold_fprs, fold_tprs, fold_aucs = [], [], []
+    feature_info = [] if save_features else None
 
     for fold, (tr, te) in enumerate(cv.split(X, y, groups=groups), 1):
         Xtr, Xte = X.iloc[tr], X.iloc[te]
@@ -102,6 +106,20 @@ def run_cv(X, y, groups, model_factory, cfg=None, top_k=None):
         fold_tprs.append(tpr)
         fold_aucs.append(fauc)
 
+        # Capture feature-level info
+        if save_features:
+            # Works for bare RF and Pipeline with a "model" step
+            estimator = (model.named_steps["model"]
+                         if hasattr(model, "named_steps") else model)
+            importances = getattr(estimator, "feature_importances_", None)
+            fold_info = {
+                "fold": fold,
+                "selected_genes": top_feat,
+                "rf_importances": (dict(zip(top_feat, importances))
+                                   if importances is not None else {}),
+            }
+            feature_info.append(fold_info)
+
     mean_auc = np.mean(fold_aucs)
     std_auc = np.std(fold_aucs)
 
@@ -114,12 +132,15 @@ def run_cv(X, y, groups, model_factory, cfg=None, top_k=None):
     best_idx = np.argmax(j_scores)
     optimal_thresh = thresholds_oof[best_idx]
 
-    return {
+    result = {
         "y": y, "oof": oof,
         "fold_fprs": fold_fprs, "fold_tprs": fold_tprs, "fold_aucs": fold_aucs,
         "mean_auc": mean_auc, "std_auc": std_auc,
         "optimal_threshold": optimal_thresh,
     }
+    if save_features:
+        result["feature_info"] = feature_info
+    return result
 
 
 def run_cv_no_fs(X, y, groups, model_factory, cfg=None):
@@ -227,7 +248,7 @@ def run_cv_combined(X_expr, X_conf, y, groups, model_factory, cfg=None, top_k=No
 
 
 def run_tissue_models(tissue, cat_list, df_meta_url, blood_subjid, X_wb,
-                      model_factory, cfg=None):
+                      model_factory, cfg=None, save_features=False):
     """Run CV for all categories of a single tissue.
 
     Designed to be called inside joblib.Parallel — one call per tissue.
@@ -240,6 +261,7 @@ def run_tissue_models(tissue, cat_list, df_meta_url, blood_subjid, X_wb,
     blood_subjid : Series — blood SAMPID → donor SUBJID
     X_wb : DataFrame — blood expression matrix
     model_factory : callable — returns a fresh model per fold
+    save_features : bool — if True, capture per-fold gene importances
 
     Returns
     -------
@@ -276,7 +298,8 @@ def run_tissue_models(tissue, cat_list, df_meta_url, blood_subjid, X_wb,
         if n_pos < cfg.MIN_POS_NEG_BLOOD or n_neg < cfg.MIN_POS_NEG_BLOOD:
             continue
 
-        res = run_cv(X_cat, y_cat, g_cat, model_factory, cfg=cfg)
+        res = run_cv(X_cat, y_cat, g_cat, model_factory, cfg=cfg,
+                     save_features=save_features)
         res["tissue"] = tissue
         res["category"] = cat
         results.append((tag, res))
