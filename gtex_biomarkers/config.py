@@ -41,6 +41,8 @@ class Config:
 
     # ── Evaluation ────────────────────────────────────────────────────────────
     AUC_CUTOFF = 0.65
+    AUC_THRESH = 0.65      # quadrant: expression AUC threshold
+    DELTA_THRESH = 0.05    # quadrant: delta (expr gain over confounders) threshold
 
     # ── Labels to exclude (normal / healthy) ──────────────────────────────────
     NORMAL_LABELS = {"clean_specimens", "no_abnormalities"}

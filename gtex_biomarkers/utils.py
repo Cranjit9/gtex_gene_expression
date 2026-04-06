@@ -52,16 +52,7 @@ def run_all_tissue_models_parallel(pairs_df, df_meta_url, blood_subjid, X_wb,
         for tag, res in tissue_results:
             results_dict[tag] = res
 
-    # Summary table
-    summary_rows = [
-        {"tissue": r["tissue"], "category": r["category"],
-         "mean_auc": r["mean_auc"], "std_auc": r["std_auc"],
-         "optimal_threshold": r["optimal_threshold"]}
-        for r in results_dict.values()
-    ]
-    summary_df = pd.DataFrame(summary_rows).sort_values("mean_auc", ascending=False)
-
-    return results_dict, summary_df
+    return results_dict, _make_summary(results_dict)
 
 
 def _make_summary(results_dict):

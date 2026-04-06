@@ -50,17 +50,20 @@ def plot_roc_folds(results, title="", ax=None):
 
 # ── Multi-model grid plots ───────────────────────────────────────────────────
 
-def plot_roc_grid(results_dict, suptitle="", save_path=None, ncols=4):
-    """ROC grid — one subplot per model."""
+def _make_grid(results_dict, plot_fn, figsize_per_cell, suptitle="",
+               save_path=None, ncols=4):
+    """Shared grid layout: create subplots, call plot_fn per tag, hide empties."""
     tags = list(results_dict.keys())
     n = len(tags)
     ncols = min(ncols, n)
     nrows = math.ceil(n / ncols)
+    w, h = figsize_per_cell
 
-    fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 5 * nrows), squeeze=False)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(w * ncols, h * nrows),
+                             squeeze=False)
     for idx, tag in enumerate(tags):
         r, c = divmod(idx, ncols)
-        plot_roc_folds(results_dict[tag], title=tag, ax=axes[r, c])
+        plot_fn(results_dict[tag], tag, axes[r, c])
     for idx in range(n, nrows * ncols):
         r, c = divmod(idx, ncols)
         axes[r, c].set_visible(False)
@@ -71,109 +74,70 @@ def plot_roc_grid(results_dict, suptitle="", save_path=None, ncols=4):
         fig.savefig(save_path, bbox_inches="tight")
     plt.close(fig)
     return fig
+
+
+def _plot_roc_cell(res, tag, ax):
+    plot_roc_folds(res, title=tag, ax=ax)
+
+
+def _plot_pr_cell(res, tag, ax):
+    mask = ~np.isnan(res["oof"])
+    y_true = res["y"].values[mask]
+    y_score = res["oof"][mask]
+    precision, recall, _ = precision_recall_curve(y_true, y_score)
+    ap = average_precision_score(y_true, y_score)
+    prevalence = y_true.mean()
+    ax.plot(recall, precision, lw=2, label=f"AP = {ap:.3f}")
+    ax.axhline(prevalence, ls="--", color="grey", label=f"Baseline = {prevalence:.3f}")
+    ax.set_xlabel("Recall")
+    ax.set_ylabel("Precision")
+    ax.set_title(f"{tag}\nAP = {ap:.3f}", fontsize=9)
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.legend(fontsize=6, loc="upper right")
+
+
+def _plot_cm_cell(res, tag, ax):
+    mask = ~np.isnan(res["oof"])
+    thresh = res["optimal_threshold"]
+    y_pred = (res["oof"][mask] >= thresh).astype(int)
+    cm = confusion_matrix(res["y"].values[mask], y_pred)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["No", "Yes"])
+    disp.plot(ax=ax, values_format="d", colorbar=False)
+    ax.set_title(f"{tag}\n(thresh = {thresh:.3f})", fontsize=8)
+
+
+def _plot_boxplot_cell(res, tag, ax):
+    y_true = res["y"].values
+    y_score = res["oof"]
+    mask = ~np.isnan(y_score)
+    p0 = y_score[mask & (y_true == 0)]
+    p1 = y_score[mask & (y_true == 1)]
+    ax.boxplot([p0, p1], vert=False, tick_labels=["No", "Yes"])
+    ax.set_xlim(0, 1)
+    ax.set_xlabel("Predicted probability")
+    ax.set_ylabel("Ground truth")
+    ax.set_title(tag, fontsize=9)
+
+
+def plot_roc_grid(results_dict, suptitle="", save_path=None, ncols=4):
+    """ROC grid — one subplot per model."""
+    return _make_grid(results_dict, _plot_roc_cell, (6, 5), suptitle, save_path, ncols)
 
 
 def plot_pr_grid(results_dict, suptitle="", save_path=None, ncols=4):
     """Precision-Recall grid — one subplot per model."""
-    tags = list(results_dict.keys())
-    n = len(tags)
-    ncols = min(ncols, n)
-    nrows = math.ceil(n / ncols)
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=(6 * ncols, 5 * nrows), squeeze=False)
-    for idx, tag in enumerate(tags):
-        r, c = divmod(idx, ncols)
-        ax = axes[r, c]
-        res = results_dict[tag]
-        mask = ~np.isnan(res["oof"])
-        y_true = res["y"].values[mask]
-        y_score = res["oof"][mask]
-        precision, recall, _ = precision_recall_curve(y_true, y_score)
-        ap = average_precision_score(y_true, y_score)
-        prevalence = y_true.mean()
-        ax.plot(recall, precision, lw=2, label=f"AP = {ap:.3f}")
-        ax.axhline(prevalence, ls="--", color="grey", label=f"Baseline = {prevalence:.3f}")
-        ax.set_xlabel("Recall")
-        ax.set_ylabel("Precision")
-        ax.set_title(f"{tag}\nAP = {ap:.3f}", fontsize=9)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.legend(fontsize=6, loc="upper right")
-    for idx in range(n, nrows * ncols):
-        r, c = divmod(idx, ncols)
-        axes[r, c].set_visible(False)
-
-    fig.suptitle(suptitle, y=1.02, fontsize=14)
-    fig.tight_layout()
-    if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-    plt.close(fig)
-    return fig
+    return _make_grid(results_dict, _plot_pr_cell, (6, 5), suptitle, save_path, ncols)
 
 
 def plot_cm_grid(results_dict, suptitle="", save_path=None, ncols=4):
     """Confusion matrix grid at Youden's J threshold."""
-    tags = list(results_dict.keys())
-    n = len(tags)
-    ncols = min(ncols, n)
-    nrows = math.ceil(n / ncols)
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=(5 * ncols, 4.5 * nrows), squeeze=False)
-    for idx, tag in enumerate(tags):
-        r, c = divmod(idx, ncols)
-        ax = axes[r, c]
-        res = results_dict[tag]
-        mask = ~np.isnan(res["oof"])
-        thresh = res["optimal_threshold"]
-        y_pred = (res["oof"][mask] >= thresh).astype(int)
-        cm = confusion_matrix(res["y"].values[mask], y_pred)
-        disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["No", "Yes"])
-        disp.plot(ax=ax, values_format="d", colorbar=False)
-        ax.set_title(f"{tag}\n(thresh = {thresh:.3f})", fontsize=8)
-    for idx in range(n, nrows * ncols):
-        r, c = divmod(idx, ncols)
-        axes[r, c].set_visible(False)
-
-    fig.suptitle(suptitle, y=1.02, fontsize=14)
-    fig.tight_layout()
-    if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-    plt.close(fig)
-    return fig
+    return _make_grid(results_dict, _plot_cm_cell, (5, 4.5), suptitle, save_path, ncols)
 
 
 def plot_boxplot_grid(results_dict, suptitle="", save_path=None, ncols=4):
     """Box plots of predicted probability by ground-truth label."""
-    tags = list(results_dict.keys())
-    n = len(tags)
-    ncols = min(ncols, n)
-    nrows = math.ceil(n / ncols)
-
-    fig, axes = plt.subplots(nrows, ncols, figsize=(7 * ncols, 4 * nrows), squeeze=False)
-    for idx, tag in enumerate(tags):
-        r, c = divmod(idx, ncols)
-        ax = axes[r, c]
-        res = results_dict[tag]
-        y_true = res["y"].values
-        y_score = res["oof"]
-        mask = ~np.isnan(y_score)
-        p0 = y_score[mask & (y_true == 0)]
-        p1 = y_score[mask & (y_true == 1)]
-        ax.boxplot([p0, p1], vert=False, tick_labels=["No", "Yes"])
-        ax.set_xlim(0, 1)
-        ax.set_xlabel("Predicted probability")
-        ax.set_ylabel("Ground truth")
-        ax.set_title(tag, fontsize=9)
-    for idx in range(n, nrows * ncols):
-        r, c = divmod(idx, ncols)
-        axes[r, c].set_visible(False)
-
-    fig.suptitle(suptitle, y=1.02, fontsize=14)
-    fig.tight_layout()
-    if save_path:
-        fig.savefig(save_path, bbox_inches="tight")
-    plt.close(fig)
-    return fig
+    return _make_grid(results_dict, _plot_boxplot_cell, (7, 4), suptitle, save_path, ncols)
 
 
 # ── Summary / comparison plots ────────────────────────────────────────────────
@@ -283,6 +247,69 @@ def plot_comparison_scatter(comp_df, save_path=None):
         fig.savefig(save_path, bbox_inches="tight")
     plt.close(fig)
     return fig
+
+
+def plot_paired_auc_bar(df, auc_col_a, auc_col_b, label_a, label_b,
+                        title="", save_path=None,
+                        color_a="#C44E52", color_b="#4878A8",
+                        sort_by=None):
+    """Paired horizontal bar chart comparing two AUC columns.
+
+    Parameters
+    ----------
+    df : DataFrame with 'tissue' and 'category' columns
+    auc_col_a, auc_col_b : column names for the two AUC values
+    label_a, label_b : legend labels
+    color_a, color_b : bar colors (defaults: coral for signal, steel-blue for baseline)
+    sort_by : column to sort by (default: auc_col_a)
+    """
+    s = df.copy()
+    s["label"] = s["tissue"] + " | " + s["category"]
+    s = s.sort_values(sort_by or auc_col_a, ascending=True).reset_index(drop=True)
+
+    y_pos = np.arange(len(s))
+    bar_h = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, max(10, len(s) * 0.4)))
+    ax.barh(y_pos + bar_h / 2, s[auc_col_a], height=bar_h, color=color_a, label=label_a)
+    ax.barh(y_pos - bar_h / 2, s[auc_col_b], height=bar_h, color=color_b, label=label_b)
+    ax.axvline(0.5, ls="--", lw=0.8, color="#AAAAAA")
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(s["label"], fontsize=6.5)
+    ax.set_xlabel("AUC")
+    ax.set_title(title)
+    ax.legend(fontsize=8, loc="lower right")
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, bbox_inches="tight")
+    plt.show()
+
+
+def plot_delta_bar(df, delta_col, title="", xlabel="", save_path=None,
+                   color="#4878A8"):
+    """Horizontal bar chart of a delta (difference) column.
+
+    Parameters
+    ----------
+    df : DataFrame with 'tissue' and 'category' columns
+    delta_col : column name for the delta values
+    color : bar color (default: steel blue)
+    """
+    s = df.copy()
+    s["label"] = s["tissue"] + " | " + s["category"]
+    s = s.sort_values(delta_col, ascending=True).reset_index(drop=True)
+
+    fig, ax = plt.subplots(figsize=(8, max(10, len(s) * 0.35)))
+    ax.barh(range(len(s)), s[delta_col], color=color, height=0.7)
+    ax.axvline(0, ls="-", lw=0.5, color="#AAAAAA")
+    ax.set_yticks(range(len(s)))
+    ax.set_yticklabels(s["label"], fontsize=6.5)
+    ax.set_xlabel(xlabel or delta_col)
+    ax.set_title(title)
+    fig.tight_layout()
+    if save_path:
+        fig.savefig(save_path, bbox_inches="tight")
+    plt.show()
 
 
 def plot_comparison_barplot(comp_df, save_path=None):
