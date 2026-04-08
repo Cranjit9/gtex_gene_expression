@@ -4,13 +4,15 @@ Can **Whole Blood gene expression** serve as a non-invasive proxy to detect **or
 
 ## Key Findings
 
-- **54 tissue x pathology models** evaluated via leak-free 5-fold grouped cross-validation
-- **10 models achieved AUC >= 0.65**, including:
-  - Breast gynecomastoid (AUC = 0.873)
-  - Liver cirrhosis (AUC = 0.795)
-  - Spleen congestion (AUC = 0.779)
-- NLP-based label imputation recovered ~30% additional liver pathology labels
-- Random Forest with variance-filtered features (20K genes) compared against Logistic Regression baseline
+- **53 tissue x pathology models** evaluated via leak-free 5-fold grouped cross-validation
+- **Random Forest on variance-filtered blood expression (20K genes)** outperformed the Logistic Regression baseline on the multi-tissue screen
+- **PC + confounder models** identified **9 tissue x pathology pairs** with `AUC >= 0.60` and `ΔAUC >= 0.05` over confounders alone, including:
+  - Liver cirrhosis (`AUC = 0.785`, `Δ = 0.218`)
+  - Spleen congestion (`AUC = 0.804`, `Δ = 0.083`)
+  - Muscle atrophy (`AUC = 0.698`, `Δ = 0.079`)
+- **Gene-level back-projection from PC models** produced full ranked biomarker lists for the qualifying pairs
+- **Pathway enrichment analysis** on those PC-derived gene rankings identified shared and tissue-specific biology across **9 qualifying pairs** and **3 pathway libraries**
+- NLP-based label imputation recovered additional liver pathology labels from free-text notes
 
 ## Installation
 
@@ -52,7 +54,10 @@ notebooks/
 ├── 06_summary_baseline.ipynb           # Summary figures (bar chart, heatmap)
 ├── 07_rf_variance_filter.ipynb         # Random Forest + 20K variance filter
 ├── 08_comparison.ipynb                 # LR vs RF comparison
-└── 09_confounder_analysis.ipynb        # Confounder-only vs expression+confounder RF
+├── 09_confounder_analysis.ipynb        # Confounder-only vs expression+confounder RF
+├── 10_tissue_pc_regression.ipynb       # PCA on blood expression, PC screening, PC+confounder RF
+├── 11_pc_gene_importance.ipynb         # Back-project PC importance to gene-level rankings
+└── 12_pathway_enrichment.ipynb         # GSEA on PC-derived gene rankings
 ```
 
 All notebooks import from the `gtex_biomarkers/` package — shared data loading, model training, and evaluation code.
@@ -87,8 +92,21 @@ gtex_gene_expression/
 - **Cross-validation**: 5-fold `StratifiedGroupKFold` grouped by donor SUBJID (prevents leakage)
 - **Feature selection**: Per-fold AUC-based ranking, top 100 genes (train-only)
 - **Models**: Logistic Regression (baseline), Random Forest (500 trees, balanced classes)
+- **Confounder analysis**: Age, sex, race, death circumstances, and ischemic time compared against expression-only and expression+confounder models
+- **PC regression**: `StandardScaler -> PCA -> univariate AUC selection of PCs -> Random Forest`, fit inside each CV fold
+- **Gene attribution from PCs**: Selected PC importances are back-projected to genes using normalized PCA loadings to obtain per-gene importance proportions
+- **Pathway analysis**: GSEA prerank on full PC-derived gene rankings using KEGG 2026, Reactome 2024, and GO Biological Process 2025
 - **Threshold tuning**: Youden's J statistic (maximises sensitivity + specificity)
 - **NLP imputation**: Regex-based category extraction with ConText-inspired negation detection
+
+## Main Outputs
+
+- `output/tables/cv_results_all_tissue_rf.csv`: RF performance across all tissue x pathology pairs
+- `output/tables/cv_three_way_comparison.csv`: confounder-only vs expression-only vs combined comparison
+- `output/tables/pc_auc_results.csv`: PC-only and PC+confounder AUC summary
+- `output/tables/pc_gene_importance_full.csv`: full ranked gene importance lists for qualifying PC models
+- `output/tables/gsea_pathway_enrichment.csv`: pathway enrichment results across qualifying pairs and libraries
+- `output/figures/`: summary ROC, PR, delta-AUC, PC, gene-sharing, and pathway figures
 
 ## License
 
