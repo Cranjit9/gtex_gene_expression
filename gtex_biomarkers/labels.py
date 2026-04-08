@@ -48,6 +48,12 @@ _NEGATION_TRIGGER = re.compile(
     re.IGNORECASE,
 )
 
+# Pre-compiled patterns (compiled once at import time, not per row)
+COMPILED_PATTERNS = {
+    cat: re.compile(pat, re.IGNORECASE)
+    for cat, pat in CATEGORY_PATTERNS.items()
+}
+
 
 def _is_negated_in_subclause(text, match_start):
     """Check if a match position is negated within its subclause."""
@@ -90,10 +96,7 @@ def extract_categories(notes_text, compiled_patterns=None):
     list of str — matched category names
     """
     if compiled_patterns is None:
-        compiled_patterns = {
-            cat: re.compile(pat, re.IGNORECASE)
-            for cat, pat in CATEGORY_PATTERNS.items()
-        }
+        compiled_patterns = COMPILED_PATTERNS
 
     if not isinstance(notes_text, str) or not notes_text.strip():
         return []

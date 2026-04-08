@@ -57,8 +57,7 @@ def build_blood_expression_matrix(df_expr, blood_meta):
     expr_numeric = df_blood_wb[overlap_wb].copy()
     expr_numeric.index = df_blood_wb["Name"].astype(str)
 
-    X_wb = expr_numeric.T
-    X_wb = X_wb.apply(pd.to_numeric, errors="coerce").fillna(0)
+    X_wb = expr_numeric.T.astype(float)
 
     return X_wb, df_blood_wb
 
@@ -114,8 +113,8 @@ def build_confounder_matrix(df_age, blood_subjid):
     for col in cols:
         X_conf[col] = blood_subjid.map(conf[col])
 
-    # Ensure numeric and impute missing with column median
-    X_conf = X_conf.apply(pd.to_numeric, errors="coerce")
+    # Impute missing with column median
+    X_conf = X_conf.astype(float)
     X_conf = X_conf.fillna(X_conf.median())
 
     return X_conf
